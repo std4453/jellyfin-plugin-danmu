@@ -4,7 +4,7 @@
 [![jellyfin](https://img.shields.io/badge/jellyfin-10.11.x|10.12.x-lightgrey?logo=jellyfin)](https://github.com/cxfksword/jellyfin-plugin-danmu/releases)
 [![LICENSE](https://img.shields.io/github/license/cxfksword/jellyfin-plugin-danmu)](https://github.com/cxfksword/jellyfin-plugin-danmu/main/LICENSE) 
 
-jellyfin弹幕自动下载插件，已支持的弹幕来源：b站，~~弹弹play~~，优酷，爱奇艺，腾讯视频，芒果TV，人人视频。
+jellyfin弹幕自动下载插件，已支持的弹幕来源：b站，弹弹play，优酷，爱奇艺，腾讯视频，芒果TV，人人视频。
 
 支持功能：
 
@@ -15,13 +15,23 @@ jellyfin弹幕自动下载插件，已支持的弹幕来源：b站，~~弹弹pla
 
 ![logo](doc/logo.png)
 
+## 本 fork 的弹弹play配置
+
+本 fork 继续遵循 GPL-3.0，保留上游版权与许可证。发布包由 CI 构建，应用凭据不注入源码或二进制。
+
+插件配置的 `Dandan` 支持 `UsePublicProxy`、`AppId`、`AppSecret`、`ProxyUrl` 和 `DownloadIntervalSeconds`。官方模式通过签名请求弹弹play API；公开代理模式不携带应用认证信息，且不能同时配置应用凭据。`ProxyUrl` 可填 HTTP/HTTPS 代理；请求间隔默认30秒，0表示不限制。
+
+弹幕 API 需要 Jellyfin 身份认证。`/api/dandan/danmu/{cid}/download?useCache=true&itemId={id}` 会校验条目 `DanmuID`，与自动下载共用条目锁及 `DanmuDiskCooldownHours`（默认72小时）。有效期内直接读取本地XML，缺失或过期才获取并保存。成功请求的时间另行持久化，即使XML内容没有变化，也不会在重启后重复获取。未设置 `useCache` 时保留直接下载行为。
+
+原有自动下载开关继续独立生效；只需要播放时下载可关闭自动下载，避免全库请求。请求失败不更新冷却记录。
+
 ## 安装插件
 
 添加插件存储库：
 
-国内加速：https://ghfast.top/https://github.com/cxfksword/jellyfin-plugin-danmu/releases/download/manifest/manifest_cn.json
+国内加速：https://ghfast.top/https://github.com/std4453/jellyfin-plugin-danmu/releases/download/manifest/manifest_cn.json
 
-国外访问：https://github.com/cxfksword/jellyfin-plugin-danmu/releases/download/manifest/manifest.json
+国外访问：https://github.com/std4453/jellyfin-plugin-danmu/releases/download/manifest/manifest.json
 
 > 如果都无法访问，可以直接从 [Release](https://github.com/cxfksword/jellyfin-plugin-danmu/releases) 页面下载，并解压到 jellyfin 插件目录中使用
 
