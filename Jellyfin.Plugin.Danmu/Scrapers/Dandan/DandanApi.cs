@@ -310,6 +310,7 @@ public class DandanApi : AbstractApi
             {
                 request.Content = JsonContent.Create(content, null, _jsonOptions);
             }
+            _logger.LogInformation("Dandanplay request {Method} {Path} via {Channel}", method, originalUri.AbsolutePath, options.UsePublicProxy ? "publicProxy" : "official");
             response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
             // 检测429 Too Many Requests，封禁1小时
