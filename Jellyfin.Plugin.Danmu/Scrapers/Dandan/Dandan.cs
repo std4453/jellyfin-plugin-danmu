@@ -35,7 +35,8 @@ public class Dandan : AbstractScraper
 
     public override uint HashPrefix => 11;
 
-    public override bool IsDeprecated => string.IsNullOrEmpty(this._api.ApiID) || string.IsNullOrEmpty(this._api.ApiSecret);
+    // 始终注册，允许安装后通过配置切换渠道；未配置凭据时请求会明确失败。
+    public override bool IsDeprecated => false;
 
     public override async Task<List<ScraperSearchInfo>> Search(BaseItem item)
     {

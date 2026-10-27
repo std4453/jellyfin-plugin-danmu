@@ -17,17 +17,17 @@ using MediaBrowser.Controller.Entities;
 using System.IO;
 using RateLimiter;
 using ComposableAsync;
+using System.Net;
 
 namespace Jellyfin.Plugin.Danmu.Scrapers.Dandan;
 
 public class DandanApi : AbstractApi
 {
-    const string API_ID = "";
-    const string API_SECRET = "";
     private TimeLimiter _limitRequestConstraint = TimeLimiter.GetFromMaxCountByInterval(1, TimeSpan.FromMilliseconds(1000));
-    private TimeLimiter _downloadLimitConstraint = TimeLimiter.GetFromMaxCountByInterval(1, TimeSpan.FromSeconds(30));
-    private static readonly object _lock = new object();
-    private DateTime lastRequestTime = DateTime.Now.AddDays(-1);
+    private readonly SemaphoreSlim _downloadGate = new(1, 1);
+    private DateTimeOffset _lastDownload = DateTimeOffset.MinValue;
+    private readonly Func<DandanOption>? _options;
+    private readonly bool _customTransport;
 
     /// <summary>
     /// 429封禁到期时间，此时间之前所有请求直接返回失败。
@@ -38,7 +38,7 @@ public class DandanApi : AbstractApi
     {
         get
         {
-            return Plugin.Instance?.Configuration.Dandan ?? new DandanOption();
+            return _options?.Invoke() ?? Plugin.Instance?.Configuration.Dandan ?? new DandanOption();
         }
     }
 
@@ -46,13 +46,14 @@ public class DandanApi : AbstractApi
     {
         get
         {
+            if (!string.IsNullOrEmpty(Config.AppId)) return Config.AppId;
             var apiId = Environment.GetEnvironmentVariable("DANDAN_API_ID");
             if (!string.IsNullOrEmpty(apiId))
             {
                 return apiId;
             }
 
-            return API_ID;
+            return string.Empty;
         }
     }
 
@@ -60,13 +61,14 @@ public class DandanApi : AbstractApi
     {
         get
         {
+            if (!string.IsNullOrEmpty(Config.AppSecret)) return Config.AppSecret;
             var apiSecret = Environment.GetEnvironmentVariable("DANDAN_API_SECRET");
             if (!string.IsNullOrEmpty(apiSecret))
             {
                 return apiSecret;
             }
 
-            return API_SECRET;
+            return string.Empty;
         }
     }
 
@@ -75,8 +77,20 @@ public class DandanApi : AbstractApi
     /// </summary>
     /// <param name="loggerFactory">The <see cref="ILoggerFactory"/>.</param>
     public DandanApi(ILoggerFactory loggerFactory)
+        : this(loggerFactory, null, null)
+    {
+    }
+
+    public DandanApi(ILoggerFactory loggerFactory, Func<DandanOption>? options, HttpMessageHandler? transport)
         : base(loggerFactory.CreateLogger<DandanApi>())
     {
+        _options = options;
+        _customTransport = transport != null;
+        if (transport != null)
+        {
+            httpClient.Dispose();
+            httpClient = new HttpClient(transport);
+        }
         httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
         httpClient.Timeout = TimeSpan.FromSeconds(10);
     }
@@ -229,7 +243,19 @@ public class DandanApi : AbstractApi
             throw new ArgumentNullException(nameof(epId));
         }
 
-        await this._downloadLimitConstraint;
+        await _downloadGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            Config.Validate();
+            var remaining = TimeSpan.FromSeconds(Config.DownloadIntervalSeconds) - (DateTimeOffset.UtcNow - _lastDownload);
+            if (remaining > TimeSpan.Zero)
+                await Task.Delay(remaining, cancellationToken).ConfigureAwait(false);
+            _lastDownload = DateTimeOffset.UtcNow;
+        }
+        finally
+        {
+            _downloadGate.Release();
+        }
 
         var withRelated = this.Config.WithRelatedDanmu ? "true" : "false";
         var chConvert = this.Config.ChConvert;
@@ -259,19 +285,32 @@ public class DandanApi : AbstractApi
         // 检查是否在429封禁期
         CheckBlocked();
 
-        var timestamp = DateTimeOffset.Now.ToUnixTimeSeconds();
-        var signature = GenerateSignature(url, timestamp);
+        var options = Config;
+        options.Validate();
+        var originalUri = new Uri(url);
+        if (options.UsePublicProxy)
+            url = "https://api.danmaku.weeblify.app/ddp/v1?path=" + Uri.EscapeDataString(originalUri.PathAndQuery.Substring(4));
+
+        // 每次按当前配置选择代理，不把应用凭据写入 HttpClient 默认头或公开代理请求。
+        using var proxyClient = !_customTransport && !string.IsNullOrEmpty(options.ProxyUrl)
+            ? new HttpClient(new HttpClientHandler { Proxy = new WebProxy(options.ProxyUrl), UseProxy = true }) { Timeout = TimeSpan.FromSeconds(10) }
+            : null;
+        var client = proxyClient ?? httpClient;
 
         HttpResponseMessage response;
         using (var request = new HttpRequestMessage(method, url)) {
-            request.Headers.Add("X-AppId", ApiID);
-            request.Headers.Add("X-Signature", signature);
-            request.Headers.Add("X-Timestamp", timestamp.ToString());
+            if (!options.UsePublicProxy)
+            {
+                var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                request.Headers.Add("X-AppId", ApiID);
+                request.Headers.Add("X-Signature", GenerateSignature(originalUri.AbsoluteUri, timestamp));
+                request.Headers.Add("X-Timestamp", timestamp.ToString());
+            }
             if (method == HttpMethod.Post && content != null)
             {
                 request.Content = JsonContent.Create(content, null, _jsonOptions);
             }
-            response = await this.httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
             // 检测429 Too Many Requests，封禁1小时
             if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)

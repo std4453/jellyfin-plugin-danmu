@@ -67,6 +67,11 @@
                             <h3>弹弹play配置</h3>
                         </legend>
 
+                        <div class="checkboxContainer"><label class="emby-checkbox-label"><input id="DandanUsePublicProxy" type="checkbox" is="emby-checkbox" /><span>使用公开代理 API</span></label><div class="fieldDescription">启用后清空应用凭据；停用时使用官方签名接口。</div></div>
+                        <div class="inputContainer"><label class="inputLabel" for="DandanAppId">APP ID</label><input id="DandanAppId" type="text" is="emby-input" autocomplete="off" /></div>
+                        <div class="inputContainer"><label class="inputLabel" for="DandanAppSecret">应用密钥</label><input id="DandanAppSecret" type="password" is="emby-input" autocomplete="new-password" /></div>
+                        <div class="inputContainer"><label class="inputLabel" for="DandanProxyUrl">HTTP/HTTPS 代理地址</label><input id="DandanProxyUrl" type="text" is="emby-input" /><div class="fieldDescription">留空使用直接连接。</div></div>
+                        <div class="inputContainer"><label class="inputLabel" for="DandanDownloadIntervalSeconds">弹幕请求间隔（秒）</label><input id="DandanDownloadIntervalSeconds" type="number" min="0" step="1" is="emby-input" /><div class="fieldDescription">默认30秒，0表示不限制；缓存命中不请求上游。</div></div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
                                 <input id="WithRelatedDanmu" name="WithRelatedDanmu" type="checkbox"
@@ -192,6 +197,12 @@
                         document.querySelector('#EnableEpisodeCountSame').checked = config.DownloadOption.EnableEpisodeCountSame;
                         document.querySelector('#DanmuDiskCooldownHours').value = config.DanmuDiskCooldownHours;
 
+                        document.querySelector('#DandanUsePublicProxy').checked = !!config.Dandan.UsePublicProxy;
+                        document.querySelector('#DandanAppId').value = config.Dandan.AppId || '';
+                        document.querySelector('#DandanAppSecret').value = config.Dandan.AppSecret || '';
+                        document.querySelector('#DandanProxyUrl').value = config.Dandan.ProxyUrl || '';
+                        document.querySelector('#DandanDownloadIntervalSeconds').value = config.Dandan.DownloadIntervalSeconds ?? 30;
+                        setCredentialState();
                         document.querySelector('#WithRelatedDanmu').checked = config.Dandan.WithRelatedDanmu;
                         document.querySelector('#ChConvert').value = config.Dandan.ChConvert;
                         document.querySelector('#MatchByFileHash').checked = config.Dandan.MatchByFileHash;
@@ -251,7 +262,12 @@
                         var cooldownHours = parseInt(document.querySelector('#DanmuDiskCooldownHours').value, 10);
                         config.DanmuDiskCooldownHours = isNaN(cooldownHours) || cooldownHours < 0 ? 72 : cooldownHours;
 
-                        var dandan = new Object();
+                        var dandan = config.Dandan || {};
+                        dandan.UsePublicProxy = document.querySelector('#DandanUsePublicProxy').checked;
+                        dandan.AppId = dandan.UsePublicProxy ? '' : document.querySelector('#DandanAppId').value.trim();
+                        dandan.AppSecret = dandan.UsePublicProxy ? '' : document.querySelector('#DandanAppSecret').value.trim();
+                        dandan.ProxyUrl = document.querySelector('#DandanProxyUrl').value.trim();
+                        dandan.DownloadIntervalSeconds = Number(document.querySelector('#DandanDownloadIntervalSeconds').value);
                         dandan.WithRelatedDanmu = document.querySelector('#WithRelatedDanmu').checked;
                         dandan.ChConvert = document.querySelector('#ChConvert').value;
                         dandan.MatchByFileHash = document.querySelector('#MatchByFileHash').checked;
@@ -272,6 +288,13 @@
                     return false;
                 });
 
+
+            function setCredentialState() {
+                var disabled = document.querySelector('#DandanUsePublicProxy').checked;
+                document.querySelector('#DandanAppId').disabled = disabled;
+                document.querySelector('#DandanAppSecret').disabled = disabled;
+            }
+            document.querySelector('#DandanUsePublicProxy').addEventListener('change', setCredentialState);
 
             function setButtons() {
                 $('.sortItem button').css('visibility', 'visible')

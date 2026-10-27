@@ -1128,7 +1128,7 @@ public class LibraryManagerEventsHelper : IDisposable
             }
 
             // 磁盘上的弹幕文件在冷却期内则跳过下载（状态持久化，重启后仍生效，防止与实时监控互相触发死循环）
-            if (!ignoreCheck && IsDanmuFileFresh(item))
+            if (!ignoreCheck && IsDanmuFileFresh(item, scraper, commentId))
             {
                 _memoryCache.Set(checkDownloadedKey, true, _danmuUpdatedExpiredOption);
                 _logger.LogInformation("[{0}]磁盘弹幕xml仍在冷却期内，忽略处理：{1}.{2}", scraper.Name, item.IndexNumber, item.Name);
@@ -1153,6 +1153,7 @@ public class LibraryManagerEventsHelper : IDisposable
                     return;
                 }
                 await this.SaveDanmu(item, bytes);
+                RecordDownload(item, scraper, commentId);
                 this._logger.LogInformation("[{0}]弹幕下载成功：name={1}.{2} commentId={3}", scraper.Name, item.IndexNumber ?? 1, item.Name, commentId);
             }
             else
@@ -1170,7 +1171,7 @@ public class LibraryManagerEventsHelper : IDisposable
     /// <summary>
     /// 磁盘上的弹幕xml文件在冷却期内（配置项DanmuDiskCooldownHours，0为不启用）则视为新鲜，无需重新下载.
     /// </summary>
-    private bool IsDanmuFileFresh(BaseItem item)
+    private bool IsDanmuFileFresh(BaseItem item, AbstractScraper? scraper = null, string? commentId = null)
     {
         var cooldownHours = this.Config.DanmuDiskCooldownHours;
         if (cooldownHours <= 0) return false;
@@ -1179,6 +1180,8 @@ public class LibraryManagerEventsHelper : IDisposable
         if (item.FileNameWithoutExtension == null) return false;
 
         var danmuPath = Path.Combine(item.ContainingFolderPath, item.FileNameWithoutExtension + ".xml");
+        if (Plugin.Instance != null && scraper != null && commentId != null)
+            return Plugin.Instance.DownloadCache.IsFresh(danmuPath, scraper.ProviderId, commentId, cooldownHours, DateTime.UtcNow);
         if (!this._fileSystem.Exists(danmuPath))
         {
             return false;
@@ -1190,6 +1193,36 @@ public class LibraryManagerEventsHelper : IDisposable
         if (diff < TimeSpan.Zero) return false;
 
         return diff.TotalHours < cooldownHours;
+    }
+
+    private void RecordDownload(BaseItem item, AbstractScraper scraper, string commentId)
+    {
+        if (Plugin.Instance == null || item.FileNameWithoutExtension == null) return;
+        var path = Path.Combine(item.ContainingFolderPath, item.FileNameWithoutExtension + ".xml");
+        Plugin.Instance.DownloadCache.Record(path, scraper.ProviderId, commentId, DateTime.UtcNow);
+    }
+
+    /// <summary>播放请求与自动下载共用条目锁、磁盘冷却、保存逻辑和成功记录。</summary>
+    public async Task<byte[]?> DownloadForPlayback(AbstractScraper scraper, BaseItem item, string commentId)
+    {
+        var itemLock = _itemLocks.GetOrAdd(item.Id.ToString("N"), _ => new SemaphoreSlim(1, 1));
+        await itemLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            var path = Path.Combine(item.ContainingFolderPath, item.FileNameWithoutExtension + ".xml");
+            if (IsDanmuFileFresh(item, scraper, commentId))
+                return await File.ReadAllBytesAsync(path).ConfigureAwait(false);
+            var danmaku = await scraper.DownloadDanmuForApi(commentId).ConfigureAwait(false);
+            if (danmaku == null) return null;
+            var bytes = danmaku.ToXml();
+            await SaveDanmu(item, bytes).ConfigureAwait(false);
+            RecordDownload(item, scraper, commentId);
+            return bytes;
+        }
+        finally
+        {
+            itemLock.Release();
+        }
     }
 
     private async Task SaveDanmu(BaseItem item, byte[] bytes)

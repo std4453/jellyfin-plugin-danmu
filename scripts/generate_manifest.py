@@ -16,9 +16,9 @@ def generate_manifest():
         "name": "Danmu",
         "description": "jellyfin的b站弹幕自动下载插件，会匹配b站番剧/电影视频，自动下载对应弹幕，并定时更新。",
         "overview": "jellyfin弹幕下载插件",
-        "owner": "cxfksword",
+        "owner": "std4453",
         "category": "Metadata",
-        "imageUrl": "https://github.com/cxfksword/jellyfin-plugin-danmu/raw/main/doc/logo.png",
+        "imageUrl": "https://github.com/std4453/jellyfin-plugin-danmu/raw/main/doc/logo.png",
         "versions": []
     }]
 
@@ -26,8 +26,8 @@ def generate_version(filepath, version, changelog):
     return {
         'version': f"{version}.0",
         'changelog': changelog,
-        'targetAbi': '10.11.0.0',
-        'sourceUrl': f'https://github.com/cxfksword/jellyfin-plugin-danmu/releases/download/v{version}/danmu_{version}.0.zip',
+        'targetAbi': '12.0.0.0',
+        'sourceUrl': f'https://github.com/std4453/jellyfin-plugin-danmu/releases/download/v{version}/danmu_{version}.0.zip',
         'checksum': md5sum(filepath),
         'timestamp': datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
     }
@@ -47,7 +47,7 @@ def main():
 
     # 解析旧 manifest
     try:
-        with urlopen('https://github.com/cxfksword/jellyfin-plugin-danmu/releases/download/manifest/manifest.json') as f:
+        with urlopen('https://github.com/std4453/jellyfin-plugin-danmu/releases/download/manifest/manifest.json') as f:
             manifest = json.load(f)
     except HTTPError as err:
         if err.code == 404:

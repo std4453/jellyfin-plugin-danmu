@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.IO;
+using Jellyfin.Plugin.Danmu.Core;
 using Jellyfin.Plugin.Danmu.Configuration;
 using Jellyfin.Plugin.Danmu.Scrapers;
 using MediaBrowser.Common;
@@ -27,6 +29,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         : base(applicationPaths, xmlSerializer)
     {
         Instance = this;
+        DownloadCache = new DanmuDownloadCache(Path.Combine(applicationPaths.DataPath, "danmu-downloads"));
         Scrapers = applicationHost.GetExports<AbstractScraper>(false).Where(o => o != null && !o.IsDeprecated).OrderBy(x => x.DefaultOrder).ToList().AsReadOnly();
         scraperManager.Register(Scrapers);
     }
@@ -46,6 +49,13 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// 全部的弹幕源
     /// </summary>
     public ReadOnlyCollection<AbstractScraper> Scrapers { get; }
+    public DanmuDownloadCache DownloadCache { get; }
+
+    public override void UpdateConfiguration(BasePluginConfiguration configuration)
+    {
+        if (configuration is PluginConfiguration options) options.Dandan.Validate();
+        base.UpdateConfiguration(configuration);
+    }
 
     /// <inheritdoc />
     public IEnumerable<PluginPageInfo> GetPages()

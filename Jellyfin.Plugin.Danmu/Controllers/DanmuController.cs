@@ -15,11 +15,12 @@ using Microsoft.Extensions.Logging;
 using Jellyfin.Plugin.Danmu.Core.Extensions;
 using System.Text.RegularExpressions;
 using System.Linq;
+using Jellyfin.Plugin.Danmu.Core;
 
 namespace Jellyfin.Plugin.Danmu.Controllers
 {
     [ApiController]
-    [AllowAnonymous]
+    [Authorize]
     public class DanmuController : ControllerBase
     {
         private readonly ILibraryManager _libraryManager;
@@ -260,7 +261,7 @@ namespace Jellyfin.Plugin.Danmu.Controllers
         /// </summary>
         [Route("/api/{site}/danmu/{cid}/download")]
         [HttpGet]
-        public async Task<ActionResult> DownloadByCommentID(string site, string cid)
+        public async Task<ActionResult> DownloadByCommentID(string site, string cid, bool useCache = false, string? itemId = null)
         {
             if (string.IsNullOrEmpty(cid))
             {
@@ -270,8 +271,21 @@ namespace Jellyfin.Plugin.Danmu.Controllers
             foreach (var scraper in this._scraperManager.All())
             {
                 var scraperId = Regex.Replace(scraper.ProviderId, "ID$", string.Empty).ToLower();
-                if (scraperId == site)
+                if (string.Equals(scraperId, site, StringComparison.OrdinalIgnoreCase))
                 {
+                    if (useCache)
+                    {
+                        if (!Guid.TryParse(itemId, out var parsedId)) return BadRequest("启用缓存需要媒体条目ID。");
+                        var item = _libraryManager.GetItemById(parsedId);
+                        if (item == null || string.IsNullOrEmpty(item.Path)) return NotFound();
+                        var value = item.ProviderIds.FirstOrDefault(pair => string.Equals(pair.Key, DanmuProviderId.UnifiedProviderId, StringComparison.OrdinalIgnoreCase)).Value;
+                        if (!DanmuProviderId.TryDecode(value, out var provider, out var mappedId) ||
+                            !string.Equals(provider, scraper.ProviderId, StringComparison.OrdinalIgnoreCase) || mappedId != cid)
+                            return BadRequest("弹幕ID与媒体条目不一致。");
+                        var cached = await _libraryManagerEventsHelper.DownloadForPlayback(scraper, item, cid).ConfigureAwait(false);
+                        if (cached != null) return File(cached, "text/xml");
+                        throw new ResourceNotFoundException();
+                    }
                     var danmaku = await scraper.DownloadDanmuForApi(cid).ConfigureAwait(false);
                     if (danmaku != null)
                     {

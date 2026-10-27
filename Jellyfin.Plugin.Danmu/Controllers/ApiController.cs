@@ -24,7 +24,7 @@ using Microsoft.Extensions.Caching.Memory;
 namespace Jellyfin.Plugin.Danmu.Controllers
 {
     [ApiController]
-    [AllowAnonymous]
+    [Authorize]
     public class ApiController : ControllerBase
     {
         private readonly ScraperManager _scraperManager;

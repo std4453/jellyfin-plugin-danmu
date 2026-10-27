@@ -160,6 +160,29 @@ public class DanmuDownloadOption
 /// </summary>
 public class DandanOption
 {
+    public bool UsePublicProxy { get; set; } = false;
+
+    public string AppId { get; set; } = string.Empty;
+
+    public string AppSecret { get; set; } = string.Empty;
+
+    public string ProxyUrl { get; set; } = string.Empty;
+
+    /// <summary>弹幕请求间隔，0 表示不限制。</summary>
+    public int DownloadIntervalSeconds { get; set; } = 30;
+
+    public void Validate()
+    {
+        if (DownloadIntervalSeconds < 0)
+            throw new System.ArgumentException("弹幕请求间隔不能为负数。");
+        if (UsePublicProxy && (!string.IsNullOrEmpty(AppId) || !string.IsNullOrEmpty(AppSecret)))
+            throw new System.ArgumentException("公开代理与应用凭据不能同时配置。");
+        if (!string.IsNullOrEmpty(ProxyUrl) &&
+            (!System.Uri.TryCreate(ProxyUrl, System.UriKind.Absolute, out var proxy) ||
+             (proxy.Scheme != "http" && proxy.Scheme != "https")))
+            throw new System.ArgumentException("代理地址必须使用 HTTP 或 HTTPS。");
+    }
+
     /// <summary>
     /// 同时获取关联的第三方弹幕
     /// </summary>
