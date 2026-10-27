@@ -15,7 +15,7 @@ using Microsoft.Extensions.Logging;
 using Jellyfin.Plugin.Danmu.Core.Extensions;
 using System.Text.RegularExpressions;
 using System.Linq;
-using Jellyfin.Plugin.Danmu.Core;
+using DanmuProviderId = Jellyfin.Plugin.Danmu.Core.DanmuProviderId;
 
 namespace Jellyfin.Plugin.Danmu.Controllers
 {
