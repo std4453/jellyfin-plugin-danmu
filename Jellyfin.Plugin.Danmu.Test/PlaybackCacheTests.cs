@@ -4,6 +4,7 @@ using Jellyfin.Plugin.Danmu.Scrapers.Entity;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Persistence;
+using MediaBrowser.Model.MediaInfo;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -18,6 +19,10 @@ public class PlaybackCacheTests
     {
         var directory = Path.Combine(Path.GetTempPath(), "danmu-playback-" + Guid.NewGuid());
         Directory.CreateDirectory(directory);
+        var previousMediaSourceManager = Movie.MediaSourceManager;
+        var mediaSourceManager = new Mock<IMediaSourceManager>();
+        mediaSourceManager.Setup(x => x.GetPathProtocol(It.IsAny<string>())).Returns(MediaProtocol.File);
+        Movie.MediaSourceManager = mediaSourceManager.Object;
         try
         {
             var logger = LoggerFactory.Create(_ => { });
@@ -36,7 +41,11 @@ public class PlaybackCacheTests
             scraper.Verify(x => x.DownloadDanmuForApi("123"), Times.Once);
             Assert.IsTrue(File.Exists(Path.Combine(directory, "episode.xml")));
         }
-        finally { Directory.Delete(directory, true); }
+        finally
+        {
+            Movie.MediaSourceManager = previousMediaSourceManager;
+            Directory.Delete(directory, true);
+        }
     }
 
     [TestMethod]
