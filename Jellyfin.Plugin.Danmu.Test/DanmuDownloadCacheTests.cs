@@ -40,11 +40,12 @@ public class DanmuDownloadCacheTests
         try
         {
             var path = Path.Combine(directory, "episode.xml");
-            File.WriteAllText(path, "<i/>");
+            File.WriteAllText(path, "<i><chatid>123</chatid><chatserver>api.dandanplay.net</chatserver></i>");
             var cache = new DanmuDownloadCache(Path.Combine(directory, "receipts"));
             var now = DateTime.UtcNow;
             File.SetLastWriteTimeUtc(path, now.AddHours(-1));
             Assert.IsTrue(cache.IsFresh(path, "DandanID", "123", 72, now));
+            Assert.IsFalse(cache.IsFresh(path, "DandanID", "124", 72, now));
             File.SetLastWriteTimeUtc(path, now.AddHours(1));
             Assert.IsFalse(cache.IsFresh(path, "DandanID", "123", 72, now));
         }

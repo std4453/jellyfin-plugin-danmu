@@ -3,6 +3,8 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Xml.Linq;
+using System.Xml;
 
 namespace Jellyfin.Plugin.Danmu.Core;
 
@@ -32,6 +34,18 @@ public sealed class DanmuDownloadCache
             }
             catch (IOException) { return false; }
             catch (JsonException) { return false; }
+        }
+        else if (source == "DandanID")
+        {
+            // 接管已有文件时先核对身份，避免修改映射后复用另一集的弹幕。
+            try
+            {
+                var xml = XDocument.Load(path).Root;
+                if (xml?.Element("chatid")?.Value != id ||
+                    !string.Equals(xml.Element("chatserver")?.Value, "api.dandanplay.net", StringComparison.OrdinalIgnoreCase)) return false;
+            }
+            catch (IOException) { return false; }
+            catch (XmlException) { return false; }
         }
         return downloaded <= now && now - downloaded < TimeSpan.FromHours(hours);
     }
